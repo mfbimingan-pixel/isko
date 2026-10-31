@@ -1005,7 +1005,7 @@ const f=document.querySelector('.sFooter');if(f)f.textContent=f.textContent.repl
 
 </script>
 <script>
-// ===== v0.9.23: original scan/PDF in a side panel on the right =====
+// ===== v0.9.24: original scan/PDF in a side panel on the right =====
 (function(){
 const fileFor=name=>[...$('bsrsFiles').files,...$('scan').files,...$('blank').files].find(f=>f.name===name);
 const isImg=f=>/^image\//.test(f.type)||/\.(jpe?g|png)$/i.test(f.name);
@@ -1142,9 +1142,9 @@ sOpenDetail=function(g){
   }
   box.prepend(row);
 };
-document.title='ISKO Attendance Reader • v0.9.23';
-document.querySelector('.badge').textContent='FREE · OFFLINE · v0.9.23';
-const f=document.querySelector('.sFooter');if(f)f.textContent=f.textContent.replace('v0.9.3','v0.9.23');
+document.title='ISKO Attendance Reader • v0.9.24';
+document.querySelector('.badge').textContent='FREE · OFFLINE · v0.9.24';
+const f=document.querySelector('.sFooter');if(f)f.textContent=f.textContent.replace('v0.9.3','v0.9.24');
 })();
 
 
@@ -1263,7 +1263,7 @@ setInterval(()=>{try{const s=window.__pdfState();if(s.open&&s.list===batchState.
 window.__applyName=applyName;
 })();
 
-// ===== v0.9.23: None for blank entries + note dropdown =====
+// ===== v0.9.24: None for blank entries + note dropdown =====
 (function(){
 const presets=['Checked on the scan. No changes.','Corrected the time after checking the scan.','Corrected AM/PM after checking the scan.','Corrected the time and AM/PM.','Handwriting unclear. Used my best reading.','Time not written on the scan (blank).'];
 const prevRender=renderRows;
@@ -2160,6 +2160,59 @@ setTimeout(()=>{try{render();}catch(e){}},300);
 // the shortcut button added by the report layer would be duplicated now
 setInterval(()=>{const s=document.getElementById('sFullShortcut');if(s)s.remove();},1500);
 window.__overview={render};
+})();
+
+</script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const KEY='isko_rqm_map_v1',RK='isko_reviewer_v1';
+const BUILTIN={'252503711200635':'RQM79-2025-TWSP-0371-0038'}; // NTTC No. -> RQM (TESDA can add more here)
+const looksRqm=v=>/^RQM[\w-]{6,}$/i.test(String(v||'').trim());
+function load(){try{return JSON.parse(localStorage.getItem(KEY)||'{}')||{};}catch(e){return {};}}
+function save(m){try{localStorage.setItem(KEY,JSON.stringify(m));}catch(e){}}
+let lastNttc='',lastSig='';
+async function peek(f){
+  try{const doc=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false,useSystemFonts:true}).promise;
+    const tc=await (await doc.getPage(1)).getTextContent();await doc.destroy();
+    const m=/NTTC No\.:\s*(\d+)/i.exec(tc.items.map(i=>i.str).join(' '));return m?m[1]:'';}catch(e){return '';}
+}
+function hint(t,warn){
+  let h=$('rqmHint');const f=$('batch');if(!f)return;
+  if(!h){h=document.createElement('div');h.id='rqmHint';h.className='muted';h.style.cssText='margin-top:4px;font-size:.9em';f.parentNode.appendChild(h);}
+  h.textContent=t||'';h.style.color=warn?'#9a5b00':'#1a6b2d';
+}
+async function check(){
+  const bf=$('bsrsFiles');const b=$('batch');if(!bf||!b)return;
+  const f=bf.files&&bf.files[0];if(!f)return;
+  const sig=f.name+'|'+f.size+'|'+f.lastModified;if(sig===lastSig)return;lastSig=sig;
+  const n=await peek(f);lastNttc=n;if(!n)return;
+  const map=Object.assign({},BUILTIN,load());const rqm=map[n];
+  const cur=b.value.trim();
+  if(rqm){
+    if(!cur||/^(NTTC|BATCH)\b/i.test(cur)||cur===rqm){b.value=rqm;b.dispatchEvent(new Event('input',{bubbles:true}));b.dispatchEvent(new Event('change',{bubbles:true}));hint('✓ RQM found automatically from the BSRS file (NTTC '+n+').');}
+    else if(cur!==rqm)hint('⚠ This BSRS file is NTTC '+n+' which is known as '+rqm+', but the box says "'+cur+'". Check it.',true);
+  }else{
+    if(!cur||/^BATCH\b/i.test(cur)){b.value='NTTC '+n;}
+    hint('New batch (NTTC '+n+'). Type its RQM number once. The reader will remember it next time.',true);try{const d=b.closest('details');if(d)d.open=true;}catch(e){}
+  }
+}
+function learn(){
+  const b=$('batch');if(!b||!lastNttc)return;const v=b.value.trim();
+  if(looksRqm(v)){const m=load();if(m[lastNttc]!==v&&BUILTIN[lastNttc]!==v){m[lastNttc]=v;save(m);hint('✓ Saved. Next time NTTC '+lastNttc+' will fill in '+v+' by itself.');}}
+}
+function init(){
+  const b=$('batch'),r=$('reviewer');if(!b)return;
+  b.addEventListener('change',learn);b.addEventListener('blur',learn);
+  // remember the reviewer name on this computer
+  if(r){try{const v=localStorage.getItem(RK);if(v&&!r.value.trim())r.value=v;}catch(e){}
+    const sv=()=>{try{if(r.value.trim())localStorage.setItem(RK,r.value.trim());}catch(e){}};r.addEventListener('change',sv);r.addEventListener('blur',sv);}
+  // carried-over report knows the RQM too
+  setInterval(()=>{try{if(window.__carry&&window.__carry.batch&&!$('batch').value.trim()){$('batch').value=window.__carry.batch;}}catch(e){}check();},800);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+window.__rqm={check,peek,BUILTIN};
 })();
 
 </script>
